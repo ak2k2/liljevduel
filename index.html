@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>liljevduel</title>
+    <style>
+      :root {
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        --fg: #e8ebf2;
+        --dim: #8b92a6;
+        --line: #ffffff14;
+        --panel: #0c0e14e8;
+        --acc: #8fc7ff;
+        --hp: #7ee6a8;
+        --enemy: #ff8a7a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #101218;
+        color: var(--fg);
+        font: 13px/1.45 var(--mono);
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+      }
+      #ui {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .sh {
+        text-shadow:
+          0 1px 2px #000c,
+          0 0 8px #0006;
+      }
+      #hud {
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        font-size: 12px;
+        color: #fff;
+        letter-spacing: 0.02em;
+      }
+      #hud span {
+        margin-right: 18px;
+      }
+      #hud span::before {
+        content: attr(data-k) " ";
+        color: #ffffffa0;
+      }
+      #tog {
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        pointer-events: auto;
+        background: #0c0e14b0;
+        color: #fff;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 5px 9px;
+        font: 12px var(--mono);
+        cursor: pointer;
+      }
+      #tog:hover,
+      #tog.on {
+        background: #0c0e14f0;
+        border-color: #ffffff40;
+      }
+      #tog.on::before {
+        content: "● ";
+        color: var(--acc);
+      }
+      #labels,
+      #dbglabels {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+      .bot {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        text-align: center;
+      }
+      .bot .nm {
+        font-size: 11px;
+        color: #fff;
+        text-shadow: 0 1px 3px #000c;
+      }
+      .bot .bar {
+        width: 60px;
+        height: 5px;
+        background: #0008;
+        border: 1px solid #fff8;
+        border-radius: 2px;
+        overflow: hidden;
+        margin: 2px auto 0;
+      }
+      .bot .bar i {
+        display: block;
+        height: 100%;
+        background: var(--enemy);
+      }
+      .dl {
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-size: 10px;
+        color: #fff;
+        text-shadow:
+          0 1px 2px #000,
+          0 0 4px #000;
+        white-space: nowrap;
+        padding-left: 6px;
+      }
+      .dmg {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        font-weight: 700;
+        font-size: 13px;
+        color: #fff;
+        text-shadow: 0 1px 2px #000c;
+        animation: rise 0.7s ease-out forwards;
+      }
+      .dmg.heal {
+        color: var(--hp);
+      }
+      .dmg.hurt {
+        color: #ff6b6b;
+      }
+      @keyframes rise {
+        to {
+          transform: translate(-50%, -180%);
+          opacity: 0;
+        }
+      }
+      #flash {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at center, transparent 50%, #ff5a5a 100%);
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #wave {
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        color: #fff;
+        opacity: 0;
+      }
+      #wave.show {
+        animation: fade 2s ease-out forwards;
+      }
+      @keyframes fade {
+        0% {
+          opacity: 0;
+        }
+        15% {
+          opacity: 1;
+        }
+        75% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+      #hpwrap {
+        position: absolute;
+        bottom: 22px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      #hpbar {
+        width: min(420px, 50vw);
+        height: 8px;
+        background: #0008;
+        border: 1px solid #fff5;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      #hpbar i {
+        display: block;
+        height: 100%;
+        background: var(--hp);
+      }
+      #hpbar i.low {
+        background: #ff5c5c;
+      }
+      #uhp {
+        font-size: 12px;
+        color: #fff;
+        min-width: 60px;
+      }
+      /* agent inspector */
+      #insp {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(440px, 48vw);
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        backdrop-filter: blur(10px);
+        transform: translateX(100%);
+        transition: transform 0.18s ease;
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+      }
+      #insp.open {
+        transform: none;
+      }
+      #insp header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--dim);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      #insp header nav {
+        display: flex;
+        gap: 2px;
+        margin-left: auto;
+      }
+      #insp header nav button {
+        background: none;
+        border: 1px solid transparent;
+        color: var(--dim);
+        font: 11px var(--mono);
+        padding: 3px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      #insp header nav button.on {
+        color: #fff;
+        border-color: #ffffff30;
+        background: #ffffff10;
+      }
+      #insp section {
+        flex: 1;
+        overflow: auto;
+        padding: 12px 14px;
+      }
+      #insp footer {
+        padding: 8px 14px;
+        border-top: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--dim);
+      }
+      .doc {
+        color: var(--dim);
+        font-size: 11px;
+        line-height: 1.5;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .doc b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .ag {
+        padding: 10px 0 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .ag:last-child {
+        border-bottom: 0;
+      }
+      .ag.dead {
+        opacity: 0.35;
+      }
+      .ah {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .ah b {
+        color: #fff;
+        font-weight: 700;
+      }
+      .ah .hp {
+        margin-left: auto;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .dec {
+        margin: 6px 0 8px;
+        font-size: 15px;
+        color: #fff;
+      }
+      .dec small {
+        font-size: 11px;
+        color: var(--dim);
+        margin-left: 8px;
+      }
+      .opt {
+        display: grid;
+        grid-template-columns: 96px 1fr 34px;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        padding: 2px 0;
+      }
+      .opt .n {
+        color: var(--fg);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt.pick .n {
+        color: var(--acc);
+      }
+      .opt .b {
+        height: 6px;
+        background: #ffffff12;
+        border-radius: 1px;
+        overflow: hidden;
+      }
+      .opt .b i {
+        display: block;
+        height: 100%;
+        background: #ffffff70;
+      }
+      .opt.pick .b i {
+        background: var(--acc);
+      }
+      .opt .p {
+        text-align: right;
+        color: var(--dim);
+      }
+      .opt .o {
+        grid-column: 2 / span 2;
+        color: var(--dim);
+        font-size: 10.5px;
+        margin-top: -2px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 1px 12px;
+        font-size: 11px;
+        margin-top: 8px;
+      }
+      .kv span:nth-child(odd) {
+        color: var(--dim);
+      }
+      .kv span:nth-child(even) {
+        color: var(--fg);
+      }
+      .lat {
+        font-size: 10.5px;
+        color: var(--dim);
+        margin-top: 6px;
+      }
+      .jb {
+        margin-bottom: 14px;
+      }
+      .jb h4 {
+        margin: 0 0 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--dim);
+        letter-spacing: 0.04em;
+      }
+      pre {
+        margin: 0;
+        font: 11px/1.45 var(--mono);
+        color: #cbd2e0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #ffffff08;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 10px;
+      }
+      pre .k {
+        color: #8fc7ff;
+      }
+      pre .s {
+        color: #c9e6a8;
+      }
+      pre .n {
+        color: #ffd27a;
+      }
+      pre .t {
+        color: #ff9aa4;
+      }
+      /* screens */
+      .screen {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #0c0e1480;
+        backdrop-filter: blur(3px);
+        pointer-events: auto;
+      }
+      .card {
+        width: min(460px, 92vw);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 26px 28px;
+        box-shadow: 0 30px 80px #0008;
+      }
+      .card h1 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #fff;
+      }
+      .card p {
+        color: var(--dim);
+        font-size: 12px;
+        margin: 10px 0 18px;
+        line-height: 1.5;
+      }
+      .keys {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 16px;
+        font-size: 12px;
+        color: var(--fg);
+        margin-bottom: 22px;
+      }
+      kbd {
+        display: inline-block;
+        min-width: 18px;
+        text-align: center;
+        background: #ffffff14;
+        border: 1px solid #ffffff28;
+        border-radius: 3px;
+        padding: 0 5px;
+        font: 11px var(--mono);
+        color: #fff;
+        margin-right: 2px;
+      }
+      .card button {
+        width: 100%;
+        background: #fff;
+        color: #0c0e14;
+        border: 0;
+        border-radius: 5px;
+        padding: 11px;
+        font: 600 13px var(--mono);
+        letter-spacing: 0.06em;
+        cursor: pointer;
+      }
+      .card button:hover {
+        background: #e6ecff;
+      }
+      .card input {
+        width: 100%;
+        margin-top: 12px;
+        padding: 8px 10px;
+        background: #ffffff0a;
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        font: 11px var(--mono);
+      }
+      .card small {
+        display: block;
+        margin-top: 8px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .res {
+        font-size: 13px;
+        color: var(--fg);
+        margin: 8px 0 18px;
+      }
+      .res b {
+        color: #fff;
+        font-size: 22px;
+        display: block;
+        margin-bottom: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="ui">
+      <div id="hud" class="sh">
+        <span data-k="wave" id="uwave">1</span><span data-k="enemies" id="uleft">0</span
+        ><span data-k="kills" id="ukills">0</span>
+      </div>
+      <div id="labels"></div>
+      <div id="dbglabels"></div>
+      <div id="flash"></div>
+      <div id="wave" class="sh"></div>
+      <div id="hpwrap">
+        <div id="hpbar"><i></i></div>
+        <span id="uhp" class="sh">100 / 100</span>
+      </div>
+      <button id="tog">tab · agent view</button>
+      <aside id="insp">
+        <header>
+          <span>agent inspector</span>
+          <nav><button data-tab="state" class="on">state</button><button data-tab="json">json</button></nav>
+        </header>
+        <section id="tab-state"></section>
+        <section id="tab-json" hidden></section>
+        <footer id="ifoot"></footer>
+      </aside>
+      <div class="screen" id="start">
+        <div class="card">
+          <h1>liljevduel</h1>
+          <p>
+            An even duel: one gun, one health bar, walls, medkits. Every enemy is a Jev agent driving an identical unit
+            through the same player API you use. Three times a second a planner lays out its options; Jev picks one;
+            code runs the route, the aim, and the trigger.
+          </p>
+          <div class="keys">
+            <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span><span>mouse · aim</span
+            ><span>click · fire (hold)</span><span><kbd>tab</kbd> agent view</span>
+          </div>
+          <button id="play">play</button>
+          <input id="key" type="password" placeholder="typesafe api key" />
+          <small>get a key at console.typesafe.ai, or put it in .env next to the server</small>
+          <small id="loadmsg">loading…</small>
+        </div>
+      </div>
+      <div class="screen" id="over" style="display: none">
+        <div class="card">
+          <h1>Down</h1>
+          <div class="res"><b id="overscore"></b><span id="overbest"></span></div>
+          <button id="again">play again</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import { createGame, CONFIG, rnd, los, dist } from "./game.js";
+      import { createJevAgent, DOCTRINE, band, travelWord } from "./agent.js";
+      import { createRenderer, blip } from "./render.js";
+
+      const $ = (id) => document.getElementById(id);
+      const { W, H } = CONFIG;
+      const WAVES = [1, 2, 2, 3, 3, 4, 4, 5];
+      const YOU = "YOU";
+      const getKey = () => $("key").value.trim();
+
+      let game = null,
+        agents = [],
+        match = null,
+        running = false,
+        last = 0,
+        hudT = 0;
+      const keys = new Set(),
+        mouse = { sx: 0.5, sy: 0.5, x: W / 2, y: H / 2, down: false };
+      const R = createRenderer({ canvas: $("c"), labels: $("labels"), dbgLabels: $("dbglabels"), flash: $("flash") });
+
+      function spawnWave() {
+        match.wave++;
+        const n = WAVES[Math.min(match.wave - 1, WAVES.length - 1)];
+        for (let i = 0; i < n; i++) {
+          const id = n > 1 ? `bot ${i + 1}` : "bot";
+          game.addUnit({ id, team: "B", x: W - 8 + rnd(-1, 1), y: H / 2 + (i - (n - 1) / 2) * 5, face: Math.PI });
+          agents.push(createJevAgent(game, id, { getKey }));
+        }
+        const w = $("wave");
+        w.textContent = `wave ${match.wave} · ${n} ${n === 1 ? "enemy" : "enemies"}`;
+        w.classList.remove("show");
+        void w.offsetWidth;
+        w.classList.add("show");
+        blip(330, 0.4, "sine", 0.05);
+      }
+      function start() {
+        $("start").style.display = "none";
+        $("over").style.display = "none";
+        if (game) R.forget(game.units.map((u) => u.id));
+        game = createGame();
+        agents = [];
+        match = { wave: 0, kills: 0, over: false, slow: 0, waveClear: 0, acc: 0 };
+        const you = game.addUnit({ id: YOU, team: "A", x: 8, y: H / 2 });
+        R.resetCamera(you);
+        spawnWave();
+        blip(440, 0.3, "sine", 0.05);
+        jsonSeen.clear();
+        running = true;
+        last = performance.now();
+        requestAnimationFrame(loop);
+      }
+      // keys and mouse become the same command a bot sends. short ramp up, instant stop.
+      let cvx = 0,
+        cvy = 0;
+      function humanCmd(dt) {
+        const ix = (keys.has("d") || keys.has("arrowright")) - (keys.has("a") || keys.has("arrowleft")),
+          iy = (keys.has("w") || keys.has("arrowup")) - (keys.has("s") || keys.has("arrowdown"));
+        const L = Math.hypot(ix, iy),
+          tx = L ? ix / L : 0,
+          ty = L ? iy / L : 0;
+        if (L) {
+          const k = Math.min(1, dt / 0.03);
+          cvx += (tx - cvx) * k;
+          cvy += (ty - cvy) * k;
+        } else cvx = cvy = 0;
+        return { mx: cvx, my: cvy, ax: mouse.x, ay: mouse.y, fire: mouse.down };
+      }
+      function step(dt) {
+        const you = game.byId(YOU);
+        game.act(YOU, match.over ? { mx: 0, my: 0, fire: false } : humanCmd(dt));
+        for (const a of agents) a.tick(dt);
+        game.step(dt);
+        for (const ev of game.events) {
+          R.effect(ev, YOU);
+          if (ev.type === "kill") {
+            if (ev.by.id === YOU) match.kills++;
+            if (ev.unit.id === YOU) {
+              match.over = true;
+              match.slow = 2.2;
+            } else if (!game.units.some((u) => u.alive && u.team === "B")) {
+              match.waveClear = 2.5;
+              you.hp = Math.min(you.maxhp, you.hp + 30);
+            }
+          }
+        }
+        game.events.length = 0;
+        if (match.waveClear > 0) {
+          match.waveClear -= dt;
+          if (match.waveClear <= 0) {
+            const dead = game.units.filter((u) => !u.alive).map((u) => u.id);
+            game.removeDead();
+            R.forget(dead);
+            agents = agents.filter((a) => game.byId(a.id));
+            spawnWave();
+          }
+        }
+      }
+      function loop(now) {
+        if (!running) return;
+        requestAnimationFrame(loop);
+        let real = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        if (match.over) {
+          match.slow -= real;
+          if (match.slow < 0) {
+            gameOver();
+            return;
+          }
+          real *= 0.15;
+        }
+        match.acc += real;
+        while (match.acc >= 1 / 120) {
+          step(1 / 120);
+          match.acc -= 1 / 120;
+        }
+        R.draw(game, { focusId: YOU, agents, mouse }, real);
+        const p = R.screenToWorld(mouse.sx, mouse.sy);
+        if (p) {
+          mouse.x = p.x;
+          mouse.y = p.y;
+        }
+        const you = game.byId(YOU),
+          hpi = $("hpbar").firstChild,
+          frac = Math.max(0, you.hp) / you.maxhp;
+        hpi.style.width = 100 * frac + "%";
+        hudT -= real;
+        if (hudT <= 0) {
+          hudT = 0.2;
+          hpi.classList.toggle("low", frac < 0.3);
+          $("uhp").textContent = Math.max(0, you.hp | 0) + " / " + you.maxhp;
+          $("uwave").textContent = match.wave;
+          $("uleft").textContent = game.units.filter((u) => u.alive && u.team === "B").length;
+          $("ukills").textContent = match.kills;
+          if (inspOpen) renderInspector();
+        }
+      }
+      function gameOver() {
+        running = false;
+        $("over").style.display = "grid";
+        const best = Math.max(match.kills, +(localStorage.getItem("best") ?? 0));
+        localStorage.setItem("best", best);
+        $("overscore").textContent = `wave ${match.wave} · ${match.kills} kills`;
+        $("overbest").textContent = `best ${best} kills`;
+      }
+
+      let inspOpen = false,
+        tab = "state";
+      const jsonSeen = new Map();
+      function toggleInsp(v) {
+        inspOpen = v ?? !inspOpen;
+        $("insp").classList.toggle("open", inspOpen);
+        $("tog").classList.toggle("on", inspOpen);
+        R.setDebug(inspOpen);
+        if (inspOpen) renderInspector();
+      }
+      $("tog").onclick = () => toggleInsp();
+      for (const b of document.querySelectorAll("#insp nav button"))
+        b.onclick = () => {
+          tab = b.dataset.tab;
+          for (const x of document.querySelectorAll("#insp nav button")) x.classList.toggle("on", x === b);
+          $("tab-state").hidden = tab !== "state";
+          $("tab-json").hidden = tab !== "json";
+          renderInspector();
+        };
+      const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const hl = (s) =>
+        esc(s).replace(
+          /("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|\b(-?\d+(?:\.\d+)?)\b/g,
+          (m, str, colon, kw, num) =>
+            str
+              ? colon
+                ? `<span class="k">${str}</span>${colon}`
+                : `<span class="s">${str}</span>`
+              : kw
+                ? `<span class="t">${kw}</span>`
+                : `<span class="n">${num}</span>`,
+        );
+      function renderInspector() {
+        if (!game) return;
+        const ss = agents.map((a) => ({ a, s: a.snapshot(), u: game.byId(a.id) })).filter((x) => x.u);
+        const calls = ss.reduce((n, x) => n + x.s.calls, 0),
+          tok = ss.reduce((n, x) => n + x.s.tokens, 0),
+          lat = ss.filter((x) => x.s.lat).map((x) => x.s.lat),
+          err = ss.find((x) => x.s.err)?.s.err;
+        $("ifoot").textContent =
+          `${ss.length} agent${ss.length === 1 ? "" : "s"} · one jev call each every 0.35 s · ${lat.length ? Math.round(lat.reduce((a, b) => a + b, 0) / lat.length) : 0} ms avg · ${calls} calls · $${((tok * 0.042) / 1e6).toFixed(4)}${err ? " · error: " + err : ""}`;
+        if (tab === "state") {
+          $("tab-state").innerHTML =
+            `<div class="doc"><b>loop</b> observe, search candidates (a*, cover, flank, retreat), describe each outcome in words, jev picks one, follow the path, lead the aim, fire on line of sight.<br><b>doctrine</b> ${esc(DOCTRINE)}</div>` +
+            ss
+              .map(({ s, u }) => {
+                const pr = s.probs ?? {},
+                  e = s.target;
+                return `<div class="ag ${u.alive ? "" : "dead"}">
+        <div class="ah"><b>${u.id}</b><span class="hp">hp ${Math.max(0, u.hp | 0)}/${u.maxhp} · ${u.moving ? "moving" : "still"}${s.fire ? " · firing" : ""}</span></div>
+        <div class="dec">${u.alive ? (s.chosen ?? "…").replace("_", " ") : "down"}${s.conf != null ? `<small>${Math.round(s.conf * 100)}% confidence · #${s.calls}</small>` : ""}</div>
+        ${s.options
+          .slice()
+          .sort((x, y) => (pr[y.name] ?? 0) - (pr[x.name] ?? 0))
+          .map((o) => {
+            const p = pr[o.name] ?? 0,
+              d = e ? dist(o.point, e) : 0,
+              sight = e ? los(o.point, e) : false;
+            return `<div class="opt ${o.name === s.chosen ? "pick" : ""}"><span class="n">${o.name.replace("_", " ")}</span><span class="b"><i style="width:${p * 100}%"></i></span><span class="p">${Math.round(p * 100)}</span><span class="o">${travelWord(o.travel)}${e ? ` · ${band(d)} · ${sight ? (d <= CONFIG.range ? "both can shoot" : "visible") : "no line of sight"}` : ""}</span></div>`;
+          })
+          .join("")}
+        ${
+          s.situation
+            ? `<div class="kv">${Object.entries(s.situation)
+                .map(([k, v]) => `<span>${k.replace(/_/g, " ")}</span><span>${v}</span>`)
+                .join("")}</div>`
+            : ""
+        }
+        <div class="lat">${s.inflight ? "asking jev…" : s.lat ? `last decision ${Math.round(s.lat)} ms` : "no decision yet"}${s.err ? " · " + esc(s.err) : ""}</div>
+      </div>`;
+              })
+              .join("");
+        } else {
+          const box = $("tab-json");
+          for (const { s, u } of ss) {
+            let el = document.querySelector(`#tab-json [data-id="${u.id}"]`);
+            if (!el) {
+              el = document.createElement("div");
+              el.className = "jb";
+              el.dataset.id = u.id;
+              el.innerHTML = `<h4></h4><pre></pre>`;
+              box.appendChild(el);
+            }
+            if (jsonSeen.get(u.id) === s.calls && el.firstChild.textContent) continue;
+            jsonSeen.set(u.id, s.calls);
+            el.firstChild.textContent = `${u.id} · request #${s.calls} · POST /v1/systemone`;
+            el.lastChild.innerHTML = s.request
+              ? hl(JSON.stringify({ request: s.request, response: s.response ?? "(pending)" }, null, 2))
+              : "no request yet";
+          }
+          for (const el of box.querySelectorAll(".jb")) if (!ss.some((x) => x.u.id === el.dataset.id)) el.remove();
+        }
+      }
+
+      addEventListener("keydown", (e) => {
+        if (e.target.tagName === "INPUT") return;
+        if (e.key === "Tab") {
+          e.preventDefault();
+          toggleInsp();
+          return;
+        }
+        keys.add(e.key.toLowerCase());
+        if (e.key === " ") e.preventDefault();
+      });
+      addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+      addEventListener("mousemove", (e) => {
+        mouse.sx = e.clientX / innerWidth;
+        mouse.sy = e.clientY / innerHeight;
+      });
+      $("c").addEventListener("mousedown", (e) => {
+        if (e.button === 0) mouse.down = true;
+      });
+      addEventListener("mouseup", () => (mouse.down = false));
+      addEventListener("blur", () => {
+        keys.clear();
+        mouse.down = false;
+      });
+      addEventListener("contextmenu", (e) => e.preventDefault());
+      $("key").value = localStorage.getItem("ts_key") ?? "";
+      $("key").oninput = (e) => localStorage.setItem("ts_key", e.target.value);
+      $("play").onclick = start;
+      $("again").onclick = start;
+      addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !running && e.target.tagName !== "INPUT") start();
+      });
+      R.ready.then((r) => {
+        $("loadmsg").textContent = r.model ? "ready" : "model failed to load, using placeholders";
+      });
+      (function idle() {
+        if (running) return;
+        requestAnimationFrame(idle);
+        R.idle();
+      })();
+    </script>
+  </body>
+</html>
