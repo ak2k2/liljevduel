@@ -1,5 +1,7 @@
 # liljevduel
 
+https://github.com/user-attachments/assets/6261a8cf-bed7-46cc-bb68-dd52879ac45c
+
 a small top down arena shooter where every enemy is controlled by jev, typesafe's system one model.
 
 one gun, one health bar, walls, medkits. you and the bots are identical units. the bot is a three layer controller:
